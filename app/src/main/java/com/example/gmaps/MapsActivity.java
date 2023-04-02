@@ -7,8 +7,14 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.PackageManagerCompat;
 import androidx.fragment.app.FragmentActivity;
 
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -17,7 +23,10 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.example.gmaps.databinding.ActivityMapsBinding;
@@ -26,6 +35,7 @@ import com.google.android.gms.maps.model.PointOfInterest;
 import java.util.Locale;
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback {
+    public Marker marker = null;
 
     private GoogleMap mMap;
     private ActivityMapsBinding binding;
@@ -57,13 +67,20 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        try {
+            // Customise the styling of the base map using a JSON object defined
+            // in a raw resource file.
+            googleMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(
+                            this, R.raw.style));
+        } catch (Resources.NotFoundException e) {
 
+        }
         // Add a marker in Sydney and move the camera
         LatLng sydney = new LatLng(-34, 151);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
+        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney").icon(bitmapDescriptorFromVector(this, R.drawable.baseline_get_app_24)));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 15));
-        setMapOnClick(mMap);
-        setPoiClicked(mMap);
+        setMapOnClick(mMap, this);
+        setPoiClicked(mMap, this);
         enableMyCurrentLocation();
 
     }
@@ -94,24 +111,30 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 return super.onOptionsItemSelected(item);
         }
     }
-    private void setMapOnClick(final  GoogleMap map){
+    private void setMapOnClick(final  GoogleMap map, Context context){
         map.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
                                           @Override
                                           public void onMapLongClick(@NonNull LatLng latLng) {
+
                                               String text = String.format(Locale.getDefault(), "Lat : %1$.5f, Long: %2$.5f",
                                                       latLng.latitude, latLng.longitude);
-                                              map.addMarker(new MarkerOptions().position(latLng).snippet(text).title("Dropped Pin"));
+                                              if (marker!=null){marker.remove();}
+                                              marker = map.addMarker(new MarkerOptions()
+                                                      .icon(bitmapDescriptorFromVector(context,R.drawable.baseline_airplanemode_active_24))
+                                                      .position(latLng)
+                                                      .snippet(text).title("Your Location"));
                                           }
                                       }
         );
 
     }
-    private void setPoiClicked(final GoogleMap googleMap){
+    private void setPoiClicked(final GoogleMap googleMap, Context context){
         googleMap.setOnPoiClickListener(new GoogleMap.OnPoiClickListener() {
             @Override
             public void onPoiClick(@NonNull PointOfInterest pointOfInterest) {
                 Marker poiMarker = googleMap.addMarker(new MarkerOptions()
                         .position(pointOfInterest.latLng)
+                        .icon(bitmapDescriptorFromVector(context, R.drawable.baseline_local_movies_24))
                         .title(pointOfInterest.name));
                 poiMarker.showInfoWindow();
             }
@@ -133,5 +156,13 @@ private void enableMyCurrentLocation(){
                     enableMyCurrentLocation();break;
                 }
         }
+    }
+    private BitmapDescriptor bitmapDescriptorFromVector(Context context, int vectorResId) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 }
