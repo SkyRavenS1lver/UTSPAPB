@@ -4,5 +4,8 @@
     <dimen name="TextSize1">50sp</dimen>
     <dimen name="TextSize2">25sp</dimen>
     <dimen name="dimen1">50dp</dimen>
+    <dimen name="dimen2">75dp</dimen>
     <dimen name="markerSize">24dp</dimen>
+    <dimen name="btmSheetX" >30dp</dimen>
+    <dimen name="elemenY">10dp</dimen>
 </resources>

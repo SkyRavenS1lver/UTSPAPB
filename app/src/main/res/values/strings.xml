@@ -1,6 +1,11 @@
 <resources>
     <string name="app_name">Travriends</string>
-    <string name="title_activity_maps">MapsActivity</string>
+    <string name="title_activity_maps">Travriends</string>
     <string name="splashDesc">"Your friendly traveling companion"</string>
+    <string name="description">Deskripsi Lokasi</string>
+    <string name="nama">Nama: </string>
+    <string name="address">Address: </string>
+    <string name="types">"Type: "</string>
+    <string name="rating">"Rating: "</string>
 
 </resources>

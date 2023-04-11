@@ -8,6 +8,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -23,10 +24,12 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 
@@ -50,6 +53,7 @@ import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.api.net.FetchPlaceRequest;
 import com.google.android.libraries.places.api.net.PlacesClient;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.Arrays;
@@ -69,6 +73,7 @@ public class MapsActivity extends AppCompatActivity implements GoogleMap.OnMarke
     private ActivityMapsBinding binding;
     public FloatingActionButton changeModeButton;
     public FloatingActionButton optionsButton;
+    public FloatingActionButton detailsButton;
     private Animation rotateOpen;
     private Animation rotateClose;
     private Animation fromBtm;
@@ -76,29 +81,35 @@ public class MapsActivity extends AppCompatActivity implements GoogleMap.OnMarke
     private boolean locationPermissionGranted = false;
     private Location lastKnownLocation;
     private PlacesClient placesClient;
+    public BottomSheetDialog btmSheetDialog;
+    private AlertDialog dialog;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-
-        binding = ActivityMapsBinding.inflate(getLayoutInflater());
-        setContentView(binding.getRoot());
+//        binding = ActivityMapsBinding.inflate(getLayoutInflater());
+        setContentView(R.layout.activity_maps);
         view=findViewById(R.id.loading);
+        makeLoading();
+//        ((DotProgressBar)findViewById(R.id.dotProgressBar)).startAnimation();
         view.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 appearButton(changeModeButton);
             }
         });
+
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         changeModeButton = findViewById(R.id.changeModeButton);
         optionsButton = findViewById(R.id.optionsButton);
+        detailsButton = findViewById(R.id.details);
         rotateOpen = AnimationUtils.loadAnimation(this, R.anim.rotate_open);
         rotateClose = AnimationUtils.loadAnimation(this, R.anim.rotate_close);
         fromBtm = AnimationUtils.loadAnimation(this, R.anim.from_bottom);
         toBtm = AnimationUtils.loadAnimation(this, R.anim.to_bottom);
         changeColorBtn(this);
+        //Bottom Sheet
+        btmSheetDialog = new BottomSheetDialog(MapsActivity.this, R.style.BottomSheetStyle);
 
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
@@ -130,11 +141,18 @@ public class MapsActivity extends AppCompatActivity implements GoogleMap.OnMarke
         }
         enableMyCurrentLocation();
         getDeviceLocation();
+        mMap.setOnMarkerClickListener(this);
         setMapOnClick(mMap, this);
         setPoiClicked(mMap, this);
     }
 
     private void setMapOnClick(final  GoogleMap map, Context context){
+        map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(@NonNull LatLng latLng) {
+                detailsButton.setVisibility(View.GONE);
+            }
+        });
         map.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
                                           @Override
                                           public void onMapLongClick(@NonNull LatLng latLng) {
@@ -216,12 +234,16 @@ private void enableMyCurrentLocation(){
             changeModeButton.setImageDrawable(ContextCompat.getDrawable(ctx, R.drawable.baseline_dark_mode_24));
             optionsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
             optionsButton.setColorFilter(getResources().getColor(R.color.black));
+            detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
+            detailsButton.setColorFilter(getResources().getColor(R.color.black));
         }
         else {
             changeModeButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             changeModeButton.setImageDrawable(ContextCompat.getDrawable(ctx, R.drawable.baseline_wb_sunny_24));
             optionsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             optionsButton.setColorFilter(getResources().getColor(R.color.white));
+            detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
+            detailsButton.setColorFilter(getResources().getColor(R.color.white));
         }
     }
     public void appearButton(View v){
@@ -247,10 +269,14 @@ private void enableMyCurrentLocation(){
     private void setVisibility(boolean clicked) {
         if (clicked){
             getSupportFragmentManager().findFragmentById(R.id.map).getView().setAlpha(1f);
+            detailsButton.setAlpha(1f);
+            detailsButton.setClickable(true);
             changeModeButton.setVisibility(View.GONE);
         }
         else {
             getSupportFragmentManager().findFragmentById(R.id.map).getView().setAlpha(0.5f);
+            detailsButton.setAlpha(0.5f);
+            detailsButton.setClickable(false);
             changeModeButton.setVisibility(View.VISIBLE);
         }
     }
@@ -285,11 +311,14 @@ private void enableMyCurrentLocation(){
             }
         } catch (SecurityException e)  {
             Log.e("Exception: %s", e.getMessage(), e);
+
         }
     }
     @Override
     public boolean onMarkerClick(final Marker marker) {
-
+//        dialog.show();
+//        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
+        detailsButton.setVisibility(View.VISIBLE);
         return false;
     }
     public void searchFromId(String Id){
@@ -297,7 +326,7 @@ private void enableMyCurrentLocation(){
         final String placeId = Id;
 // Specify the fields to return.
         final List<Place.Field> placeFields = Arrays.asList(Place.Field.ID, Place.Field.NAME,
-                Place.Field.ADDRESS,Place.Field.WEBSITE_URI, Place.Field.TYPES, Place.Field.PHONE_NUMBER);
+                Place.Field.ADDRESS, Place.Field.TYPES, Place.Field.RATING);
 // Construct a request object, passing the place ID and fields array.
         final FetchPlaceRequest request = FetchPlaceRequest.newInstance(placeId, placeFields);
         placesClient.fetchPlace(request).addOnSuccessListener((response) -> {
@@ -311,5 +340,14 @@ private void enableMyCurrentLocation(){
                 // TODO: Handle error with given status code.
             }
         });
+    }
+    public void makeLoading(){
+        AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
+        View view = LayoutInflater.from(getApplicationContext()).inflate(R.layout.loading_bar,null);
+        builder.setView(view);
+//        ((DotProgressBar)view.findViewById(R.id.dotProgressBar)).startAnimation();
+        builder.setCancelable(false);
+        dialog = builder.create();
+        dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
     }
 }
