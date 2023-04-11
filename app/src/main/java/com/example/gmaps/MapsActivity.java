@@ -90,7 +90,7 @@ public class MapsActivity extends AppCompatActivity implements GoogleMap.OnMarke
         setContentView(R.layout.activity_maps);
         view=findViewById(R.id.loading);
         makeLoading();
-//        ((DotProgressBar)findViewById(R.id.dotProgressBar)).startAnimation();
+
         view.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
