@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Travriends</string>
+    <string name="splashDesc">Teman perjalanan anda</string>
+    <string name="qibla">Arah Kiblat</string>
+    <string name="notSupported">Tidak Didukung</string>
+    <string name="poiInfo">Klik Saya Untuk Memunculkan Detail!</string>
+    <string name="direcInfo">Klik Saya Untuk Pergi Ke Lokasi!</string>
+    <string name="Err_Message">Lokasi Tidak Ditemukan!</string>
+    <string name="destination">Tujuan Anda</string>
+    <string name="temp">"Suhu: "</string>
+    <string name="humidity">"Kelembaban: "</string>
+</resources>

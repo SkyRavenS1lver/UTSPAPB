@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Travriends</string>
+    <string name="splashDesc">あなたのフレンドリーな旅の仲間</string>
+    <string name="qibla">キブラ方向</string>
+    <string name="notSupported">サポートされていません</string>
+    <string name="poiInfo">詳細については、もう一度クリックしてください。</string>
+    <string name="direcInfo">ここで方向を取得するには、もう一度クリックしてください。</string>
+    <string name="Err_Message">場所が見つかりません!</string>
+    <string name="destination">あなたの目的地</string>
+    <string name="temp">温度:</string>
+    <string name="humidity">湿度:</string>
+</resources>

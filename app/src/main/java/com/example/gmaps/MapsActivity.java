@@ -104,7 +104,6 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
     private final String sharedPrefFile = "com.example.gmaps";
 
     private PlacesClient placesClient;
-    public BottomSheetDialog btmSheetDialog;
     public static AlertDialog dialog;
     private  boolean isScreenMaps = true;
     public boolean clickedSearch = false;
@@ -194,8 +193,6 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
         closeSearch = AnimationUtils.loadAnimation(this, R.anim.seach_close);
         rotateSearch = AnimationUtils.loadAnimation(this, R.anim.rotate_search);
         changeMode(changeModeButton);
-        //Bottom Sheet
-        btmSheetDialog = new BottomSheetDialog(MapsActivity.this, R.style.BottomSheetStyle);
         display(changePageButton);
 
 
