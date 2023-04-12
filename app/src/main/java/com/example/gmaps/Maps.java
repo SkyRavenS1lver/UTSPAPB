@@ -37,7 +37,7 @@ import com.google.android.libraries.places.api.net.PlacesClient;
 import java.util.Locale;
 import java.util.Objects;
 
-public class Maps extends Fragment implements GoogleMap.OnMarkerClickListener, OnMapReadyCallback {
+public class Maps extends Fragment implements OnMapReadyCallback {
     public Maps() {
         // Required empty public constructor
     }
@@ -48,7 +48,7 @@ public class Maps extends Fragment implements GoogleMap.OnMarkerClickListener, O
     private Location lastKnownLocation;
     private PlacesClient placesClient;
     private boolean locationPermissionGranted = false;
-    public Marker poiMarker = null;
+    public static Marker poiMarker = null;
     public Marker currentLoc = null;
     private String poiType;
 
@@ -71,19 +71,11 @@ public class Maps extends Fragment implements GoogleMap.OnMarkerClickListener, O
     }
 
     @Override
-    public boolean onMarkerClick(@NonNull Marker marker) {
-        if (poiType.equals("poi")){
-        MapsActivity.detailsButton.setVisibility(View.VISIBLE);
-        }
-        return false;
-    }
-
-    @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
         enableMyCurrentLocation();
         getDeviceLocation();
-        mMap.setOnMarkerClickListener(this);
+//        mMap.setOnMarkerClickListener(this);
         setMapOnClick(mMap, this.getContext());
         setPoiClicked(mMap, this.getContext());
         if (MapsActivity.isDayMode) {
@@ -103,31 +95,31 @@ public class Maps extends Fragment implements GoogleMap.OnMarkerClickListener, O
                 poiMarker = googleMap.addMarker(new MarkerOptions()
                         .position(pointOfInterest.latLng)
                         .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE))
-                        .title(getString(R.string.poiInfo)));
+                        .title(pointOfInterest.name));
                 poiMarker.showInfoWindow();
             }
         });
     }
 
     private void setMapOnClick(final  GoogleMap map, Context context){
-        map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
-            @Override
-            public void onMapClick(@NonNull LatLng latLng) {
-                MapsActivity.detailsButton.setVisibility(View.GONE);
-            }
-        });
+//        map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
+//            @Override
+//            public void onMapClick(@NonNull LatLng latLng) {
+//                MapsActivity.detailsButton.setVisibility(View.GONE);
+//            }
+//        });
         map.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
                                           @Override
                                           public void onMapLongClick(@NonNull LatLng latLng) {
                                               poiType = "direct";
-                                              MapsActivity.detailsButton.setVisibility(View.GONE);
+//                                              MapsActivity.detailsButton.setVisibility(View.GONE);
                                               String text = String.format(Locale.getDefault(), "Lat : %1$.5f, Long: %2$.5f",
                                                       latLng.latitude, latLng.longitude);
                                               if (poiMarker!=null){poiMarker.remove();}
                                               poiMarker = map.addMarker(new MarkerOptions()
                                                       .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE))
                                                       .position(latLng)
-                                                      .snippet(text).title(getString(R.string.direcInfo)));
+                                                      .snippet(text).title(getString(R.string.destination)));
                                           }
                                       }
         );

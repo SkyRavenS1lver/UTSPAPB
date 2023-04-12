@@ -30,6 +30,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
@@ -45,7 +47,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.SearchView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.api.ApiException;
@@ -71,6 +75,7 @@ import com.google.android.libraries.places.api.net.PlacesClient;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -86,14 +91,14 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
     public static FloatingActionButton changeModeButton;
     public FloatingActionButton changeLangButton;
     public FloatingActionButton optionsButton;
-    public FloatingActionButton changePageButton;
-    public static FloatingActionButton detailsButton;
+    public FloatingActionButton changePageButton, searchOpen;
+//    public static FloatingActionButton detailsButton;
     private Animation rotateOpen;
     private Animation rotateClose;
     private Animation fromBtm;
     private Animation toBtm;
     private Animation fromRight;
-    private Animation toRight;
+    private Animation toRight, openSearch,closeSearch, rotateSearch;
     public static String MODE_KEY = "Mode";
     public static SharedPreferences sharedPreferences;
     private final String sharedPrefFile = "com.example.gmaps";
@@ -102,16 +107,60 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
     public BottomSheetDialog btmSheetDialog;
     public static AlertDialog dialog;
     private  boolean isScreenMaps = true;
+    public boolean clickedSearch = false;
+
+
     private FragmentManager fragmentManager = getSupportFragmentManager();
     private FragmentTransaction fragmentTransaction;
     Fragment mapFragment;
     Fragment qiblaFragment;
     public static float currentTemp = 0f;
     public static float currentHumidity = 0f;
+    public SearchView searchView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+        searchView =  findViewById(R.id.locationSearch);
+        searchView.bringToFront();
+//        searchView.setIconified(false);
+        searchView.requestFocusFromTouch();
+        searchView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                searchView.setIconified(false);
+            }
+        });
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String s) {
+                List<Address> addressList = null;
+                if (!s.equals("")){
+                    Geocoder geocoder = new Geocoder(MapsActivity.this);
+                    try {
+                        addressList = geocoder.getFromLocationName(s,5);
+                    } catch (IOException e) {
+                        Toast.makeText(MapsActivity.this,getString(R.string.Err_Message),Toast.LENGTH_LONG).show();
+                        throw new RuntimeException(e);
+                    }
+                    for (int i = 0; i<addressList.size();i++ )
+                    {Address address = addressList.get(i);
+                        LatLng latLng = new LatLng(address.getLatitude(), address.getLongitude());
+                        if (Maps.poiMarker!= null){Maps.poiMarker.remove();}
+                        Maps.poiMarker =  Maps.mMap.addMarker(new MarkerOptions()
+                                .position(latLng)
+                                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE)));
+                        Maps.mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));}
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String s) {
+                return false;
+            }
+        });
+        searchOpen = findViewById(R.id.searchOpen);
         sharedPreferences = getSharedPreferences(sharedPrefFile, MODE_PRIVATE);
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         sensorHumid = sensorManager.getDefaultSensor(Sensor.TYPE_RELATIVE_HUMIDITY);
@@ -133,7 +182,7 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
         changeModeButton = findViewById(R.id.changeModeButton);
         changeLangButton = findViewById(R.id.changeLangButton);
         optionsButton = findViewById(R.id.optionsButton);
-        detailsButton = findViewById(R.id.details);
+//        detailsButton = findViewById(R.id.details);
         changePageButton = findViewById(R.id.changePageButton);
         rotateOpen = AnimationUtils.loadAnimation(this, R.anim.rotate_open);
         rotateClose = AnimationUtils.loadAnimation(this, R.anim.rotate_close);
@@ -141,6 +190,9 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
         toBtm = AnimationUtils.loadAnimation(this, R.anim.to_bottom);
         fromRight = AnimationUtils.loadAnimation(this, R.anim.from_right);
         toRight = AnimationUtils.loadAnimation(this, R.anim.to_right);
+        openSearch = AnimationUtils.loadAnimation(this, R.anim.search_open);
+        closeSearch = AnimationUtils.loadAnimation(this, R.anim.seach_close);
+        rotateSearch = AnimationUtils.loadAnimation(this, R.anim.rotate_search);
         changeMode(changeModeButton);
         //Bottom Sheet
         btmSheetDialog = new BottomSheetDialog(MapsActivity.this, R.style.BottomSheetStyle);
@@ -161,15 +213,6 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
         fragmentTransaction.commit();
     }
 
-
-    private BitmapDescriptor bitmapDescriptorFromVector(Context context, int vectorResId) {
-        Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
-        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
-        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        vectorDrawable.draw(canvas);
-        return BitmapDescriptorFactory.fromBitmap(bitmap);
-    }
     public void changeMode(View v) {
         try {
             if (Maps.mMap!=null){
@@ -190,29 +233,44 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
         }
     }
     public void changeColorBtn(Context ctx){
+        int id = searchView.getContext()
+                .getResources()
+                .getIdentifier("android:id/search_src_text", null, null);
+        int searchPlateId = searchView.getContext().getResources().getIdentifier("android:id/search_src_text", null, null);
+        EditText editText = (EditText) searchView.findViewById(id);
+        EditText searchPlate = (EditText) searchView.findViewById(searchPlateId);
+        searchPlate.setHint("Search");
         if (isDayMode) {
             changeModeButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
             changeModeButton.setImageDrawable(ContextCompat.getDrawable(ctx, R.drawable.baseline_dark_mode_24));
             optionsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
             optionsButton.setColorFilter(getResources().getColor(R.color.black));
-            detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
-            detailsButton.setColorFilter(getResources().getColor(R.color.black));
+//            detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
+//            detailsButton.setColorFilter(getResources().getColor(R.color.black));
             changePageButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
             changePageButton.setColorFilter(getResources().getColor(R.color.black));
             changeLangButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
             changeLangButton.setColorFilter(getResources().getColor(R.color.black));
+            searchOpen.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
+            searchOpen.setColorFilter(getResources().getColor(R.color.black));
+            searchView.setBackground(ContextCompat.getDrawable(ctx, R.drawable.shape));
+            editText.setTextColor(getColor(R.color.black));
         }
         else {
             changeModeButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             changeModeButton.setImageDrawable(ContextCompat.getDrawable(ctx, R.drawable.baseline_wb_sunny_24));
             optionsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             optionsButton.setColorFilter(getResources().getColor(R.color.white));
-            detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
-            detailsButton.setColorFilter(getResources().getColor(R.color.white));
+//            detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
+//            detailsButton.setColorFilter(getResources().getColor(R.color.white));
             changePageButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             changePageButton.setColorFilter(getResources().getColor(R.color.white));
             changeLangButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             changeLangButton.setColorFilter(getResources().getColor(R.color.white));
+            searchOpen.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
+            searchOpen.setColorFilter(getResources().getColor(R.color.white));
+            searchView.setBackground(ContextCompat.getDrawable(ctx, R.drawable.shape_dark));
+            editText.setTextColor(getColor(R.color.white));
         }
     }
     public void appearButton(View v){
@@ -224,6 +282,21 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
         view.bringToFront();
         }
         else{view.setVisibility(View.GONE);}
+    }
+    public void appearSearch(View v){
+        clickedSearch = !clickedSearch;
+        if (clickedSearch){
+            searchView.setVisibility(View.VISIBLE);
+            searchView.startAnimation(openSearch);
+            searchOpen.startAnimation(rotateSearch);
+            searchOpen.setImageDrawable(ContextCompat.getDrawable(v.getContext(), R.drawable.baseline_search_off_24));
+        }
+        else {
+            searchView.setVisibility(View.GONE);
+            searchView.startAnimation(closeSearch);
+            searchOpen.startAnimation(rotateSearch);
+            searchOpen.setImageDrawable(ContextCompat.getDrawable(v.getContext(), R.drawable.baseline_search_24));
+        }
     }
 
     private void setAnimation(boolean clicked) {
@@ -243,42 +316,32 @@ public class MapsActivity extends AppCompatActivity implements SensorEventListen
     private void setVisibility(boolean clicked) {
         if (clicked){
             ((FrameLayout)findViewById(R.id.screenFrag)).setAlpha(1f);
-            detailsButton.setAlpha(1f);
-            detailsButton.setClickable(true);
+//            detailsButton.setAlpha(1f);
+//            detailsButton.setClickable(true);
+            searchOpen.setAlpha(1f);
+            searchOpen.setClickable(true);
+            searchView.setClickable(true);
+            searchView.setFocusable(true);
+            searchView.setAlpha(1f);
             changeModeButton.setVisibility(View.GONE);
             changePageButton.setVisibility(View.GONE);
             changeLangButton.setVisibility(View.GONE);
         }
         else {
             ((FrameLayout)findViewById(R.id.screenFrag)).setAlpha(0.5f);
-            detailsButton.setAlpha(0.5f);
-            detailsButton.setClickable(false);
+//            detailsButton.setAlpha(0.5f);
+//            detailsButton.setClickable(false);
+            searchOpen.setAlpha(0.5f);
+            searchOpen.setClickable(false);
+            searchView.setClickable(false);
+            searchView.setFocusable(false);
+            searchView.setAlpha(0.5f);
             changeModeButton.setVisibility(View.VISIBLE);
             changePageButton.setVisibility(View.VISIBLE);
             changeLangButton.setVisibility(View.VISIBLE);
         }
     }
 
-    public void searchFromId(String Id){
-        // Define a Place ID.
-        final String placeId = Id;
-// Specify the fields to return.
-        final List<Place.Field> placeFields = Arrays.asList(Place.Field.ID, Place.Field.NAME,
-                Place.Field.ADDRESS, Place.Field.TYPES, Place.Field.RATING);
-// Construct a request object, passing the place ID and fields array.
-        final FetchPlaceRequest request = FetchPlaceRequest.newInstance(placeId, placeFields);
-        placesClient.fetchPlace(request).addOnSuccessListener((response) -> {
-            Place place = response.getPlace();
-            Log.i(TAG, "Place found: " + place.getName());
-        }).addOnFailureListener((exception) -> {
-            if (exception instanceof ApiException) {
-                final ApiException apiException = (ApiException) exception;
-                Log.e(TAG, "Place not found: " + exception.getMessage());
-                final int statusCode = apiException.getStatusCode();
-                // TODO: Handle error with given status code.
-            }
-        });
-    }
     public void makeLoading(){
         AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
         View view = LayoutInflater.from(getApplicationContext()).inflate(R.layout.loading_bar,null);

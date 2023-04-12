@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">Travriends</string>
-    <string name="title_activity_maps">@string/app_name</string>
+    <string name="app_name" translatable="false">Travriends</string>
+    <string name="title_activity_maps" translatable="false">@string/app_name</string>
     <string name="splashDesc">"Your friendly traveling companion"</string>
     <string name="description">Deskripsi Lokasi</string>
     <string name="nama">Nama: </string>
@@ -16,5 +16,7 @@
     <string name="humidity">"Humid: "</string>
     <string name="poiInfo">Click Me Again For More Detail!</string>
     <string name="direcInfo">Click Me Again To Get Direction Here!</string>
+    <string name="Err_Message">Location Not Found!</string>
+    <string name="destination">Your Destination</string>
 
 </resources>
