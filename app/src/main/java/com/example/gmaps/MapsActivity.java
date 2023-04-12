@@ -6,10 +6,17 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.appwidget.AppWidgetManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
@@ -19,10 +26,16 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -32,6 +45,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -60,152 +75,93 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-public class MapsActivity extends AppCompatActivity implements GoogleMap.OnMarkerClickListener, OnMapReadyCallback {
-    FusedLocationProviderClient fusedLocationProviderClient;
-    protected LocationManager locationManager;
-    private final static int REQUEST_CODE = 1000;
-    public boolean isDayMode = true;
+public class MapsActivity extends AppCompatActivity implements SensorEventListener {
+    private SensorManager sensorManager;
+    private Sensor sensorTemp,sensorHumid;
+    private long mLastClickTime = 0;
+    private boolean keyboardVisibility = false;
+    public static boolean isDayMode = false;
     public boolean clicked = false;
     View view;
-    public Marker poiMarker = null;
-    public Marker currentLoc = null;
-    private GoogleMap mMap;
-    private ActivityMapsBinding binding;
-    public FloatingActionButton changeModeButton;
+    public static FloatingActionButton changeModeButton;
+    public FloatingActionButton changeLangButton;
     public FloatingActionButton optionsButton;
-    public FloatingActionButton detailsButton;
+    public FloatingActionButton changePageButton;
+    public static FloatingActionButton detailsButton;
     private Animation rotateOpen;
     private Animation rotateClose;
     private Animation fromBtm;
     private Animation toBtm;
-    private boolean locationPermissionGranted = false;
-    private Location lastKnownLocation;
+    private Animation fromRight;
+    private Animation toRight;
+    public static String MODE_KEY = "Mode";
+    public static SharedPreferences sharedPreferences;
+    private final String sharedPrefFile = "com.example.gmaps";
+
     private PlacesClient placesClient;
     public BottomSheetDialog btmSheetDialog;
-    private AlertDialog dialog;
+    public static AlertDialog dialog;
+    private  boolean isScreenMaps = true;
+    private FragmentManager fragmentManager = getSupportFragmentManager();
+    private FragmentTransaction fragmentTransaction;
+    Fragment mapFragment;
+    Fragment qiblaFragment;
+    public static float currentTemp = 0f;
+    public static float currentHumidity = 0f;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-//        binding = ActivityMapsBinding.inflate(getLayoutInflater());
         setContentView(R.layout.activity_maps);
+        sharedPreferences = getSharedPreferences(sharedPrefFile, MODE_PRIVATE);
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        sensorHumid = sensorManager.getDefaultSensor(Sensor.TYPE_RELATIVE_HUMIDITY);
+        sensorTemp = sensorManager.getDefaultSensor(Sensor.TYPE_AMBIENT_TEMPERATURE);
+        mapFragment = new Maps();
+        qiblaFragment = new QiblaFrag();
         view=findViewById(R.id.loading);
+        sharedPreferences = getSharedPreferences(sharedPrefFile, MODE_PRIVATE);
+        isDayMode = !sharedPreferences.getBoolean(MODE_KEY, true);
         makeLoading();
-
+        dialog.show();
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
         view.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                appearButton(changeModeButton);
+                appearButton(optionsButton);
             }
         });
-
-        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         changeModeButton = findViewById(R.id.changeModeButton);
+        changeLangButton = findViewById(R.id.changeLangButton);
         optionsButton = findViewById(R.id.optionsButton);
         detailsButton = findViewById(R.id.details);
+        changePageButton = findViewById(R.id.changePageButton);
         rotateOpen = AnimationUtils.loadAnimation(this, R.anim.rotate_open);
         rotateClose = AnimationUtils.loadAnimation(this, R.anim.rotate_close);
         fromBtm = AnimationUtils.loadAnimation(this, R.anim.from_bottom);
         toBtm = AnimationUtils.loadAnimation(this, R.anim.to_bottom);
-        changeColorBtn(this);
+        fromRight = AnimationUtils.loadAnimation(this, R.anim.from_right);
+        toRight = AnimationUtils.loadAnimation(this, R.anim.to_right);
+        changeMode(changeModeButton);
         //Bottom Sheet
         btmSheetDialog = new BottomSheetDialog(MapsActivity.this, R.style.BottomSheetStyle);
+        display(changePageButton);
 
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
-
-
-        mapFragment.getMapAsync(this);
     }
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
-    @Override
-    public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
-        try {
-            // Customise the styling of the base map using a JSON object defined
-            // in a raw resource file.
-            googleMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(
-                            this, R.raw.day_mode));
-        } catch (Resources.NotFoundException e) {
+    public void display(View v) {
+        fragmentTransaction = fragmentManager.beginTransaction();
+        fragmentTransaction.setCustomAnimations(R.anim.page_up, R.anim.page_down);
+        if(isScreenMaps) {fragmentTransaction.replace(R.id.screenFrag, mapFragment);
         }
-        enableMyCurrentLocation();
-        getDeviceLocation();
-        mMap.setOnMarkerClickListener(this);
-        setMapOnClick(mMap, this);
-        setPoiClicked(mMap, this);
-    }
-
-    private void setMapOnClick(final  GoogleMap map, Context context){
-        map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
-            @Override
-            public void onMapClick(@NonNull LatLng latLng) {
-                detailsButton.setVisibility(View.GONE);
-            }
-        });
-        map.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
-                                          @Override
-                                          public void onMapLongClick(@NonNull LatLng latLng) {
-
-                                              String text = String.format(Locale.getDefault(), "Lat : %1$.5f, Long: %2$.5f",
-                                                      latLng.latitude, latLng.longitude);
-                                              if (poiMarker!=null){poiMarker.remove();}
-                                              poiMarker = map.addMarker(new MarkerOptions()
-                                                      .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE))
-                                                      .position(latLng)
-                                                      .snippet(text).title("Your Location"));
-                                          }
-                                      }
-        );
-
-    }
-    private void setPoiClicked(final GoogleMap googleMap, Context context){
-        googleMap.setOnPoiClickListener(new GoogleMap.OnPoiClickListener() {
-            @Override
-            public void onPoiClick(@NonNull PointOfInterest pointOfInterest) {
-
-                if (poiMarker!= null){poiMarker.remove();}
-                poiMarker = googleMap.addMarker(new MarkerOptions()
-                        .position(pointOfInterest.latLng)
-                        .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ROSE))
-                        .title(pointOfInterest.name));
-                poiMarker.showInfoWindow();
-            }
-        });
-    }
-private void enableMyCurrentLocation(){
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
-        == PackageManager.PERMISSION_GRANTED){locationPermissionGranted = true;
+        else {fragmentTransaction.replace(R.id.screenFrag, qiblaFragment);
         }
-        else {ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 1);
-        ;locationPermissionGranted = false;}
-    mMap.setMyLocationEnabled(locationPermissionGranted);
-    mMap.getUiSettings().setMyLocationButtonEnabled(locationPermissionGranted);
-    mMap.getUiSettings().setCompassEnabled(locationPermissionGranted);
-}
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        switch (requestCode){
-            case 1:
-                if(grantResults.length>0 && grantResults[0]==PackageManager.PERMISSION_GRANTED){
-                    enableMyCurrentLocation();break;
-                }
-            default:
-                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
+        isScreenMaps = !isScreenMaps;
+        fragmentTransaction.addToBackStack(null);
+        fragmentTransaction.commit();
     }
+
+
     private BitmapDescriptor bitmapDescriptorFromVector(Context context, int vectorResId) {
         Drawable vectorDrawable = ContextCompat.getDrawable(context, vectorResId);
         vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
@@ -216,13 +172,18 @@ private void enableMyCurrentLocation(){
     }
     public void changeMode(View v) {
         try {
+            if (Maps.mMap!=null){
             if (isDayMode) {
-                mMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(
+                Maps.mMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(
                         this, R.raw.night_mode));}
-            else {mMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(
+            else {Maps.mMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(
                     this, R.raw.day_mode));}
+        }
             isDayMode = !isDayMode;
             changeColorBtn(v.getContext());
+            if (QiblaFrag.coba!= null){
+                QiblaFrag.changeBG(isDayMode, this);
+            }
         }
         catch(Resources.NotFoundException e){
             return;
@@ -236,6 +197,10 @@ private void enableMyCurrentLocation(){
             optionsButton.setColorFilter(getResources().getColor(R.color.black));
             detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
             detailsButton.setColorFilter(getResources().getColor(R.color.black));
+            changePageButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
+            changePageButton.setColorFilter(getResources().getColor(R.color.black));
+            changeLangButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.white)));
+            changeLangButton.setColorFilter(getResources().getColor(R.color.black));
         }
         else {
             changeModeButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
@@ -244,6 +209,10 @@ private void enableMyCurrentLocation(){
             optionsButton.setColorFilter(getResources().getColor(R.color.white));
             detailsButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
             detailsButton.setColorFilter(getResources().getColor(R.color.white));
+            changePageButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
+            changePageButton.setColorFilter(getResources().getColor(R.color.white));
+            changeLangButton.setBackgroundTintList(ColorStateList.valueOf(getResources().getColor(R.color.black)));
+            changeLangButton.setColorFilter(getResources().getColor(R.color.white));
         }
     }
     public void appearButton(View v){
@@ -260,67 +229,36 @@ private void enableMyCurrentLocation(){
     private void setAnimation(boolean clicked) {
     if (clicked){
         changeModeButton.startAnimation(toBtm);
+        changePageButton.startAnimation(toRight);
+        changeLangButton.startAnimation(toBtm);
         optionsButton.startAnimation(rotateOpen);
     }
-    else {changeModeButton.startAnimation(fromBtm);
+    else {
+        changeModeButton.startAnimation(fromBtm);
+        changeLangButton.startAnimation(fromBtm);
+        changePageButton.startAnimation(fromRight);
         optionsButton.startAnimation(rotateClose);}
     }
 
     private void setVisibility(boolean clicked) {
         if (clicked){
-            getSupportFragmentManager().findFragmentById(R.id.map).getView().setAlpha(1f);
+            ((FrameLayout)findViewById(R.id.screenFrag)).setAlpha(1f);
             detailsButton.setAlpha(1f);
             detailsButton.setClickable(true);
             changeModeButton.setVisibility(View.GONE);
+            changePageButton.setVisibility(View.GONE);
+            changeLangButton.setVisibility(View.GONE);
         }
         else {
-            getSupportFragmentManager().findFragmentById(R.id.map).getView().setAlpha(0.5f);
+            ((FrameLayout)findViewById(R.id.screenFrag)).setAlpha(0.5f);
             detailsButton.setAlpha(0.5f);
             detailsButton.setClickable(false);
             changeModeButton.setVisibility(View.VISIBLE);
+            changePageButton.setVisibility(View.VISIBLE);
+            changeLangButton.setVisibility(View.VISIBLE);
         }
     }
-    private void getDeviceLocation() {
-        /*
-         * Get the best and most recent location of the device, which may be null in rare
-         * cases when a location is not available.
-         */
-        try {
-            if (locationPermissionGranted) {
-                Task<Location> locationResult = fusedLocationProviderClient.getLastLocation();
-                locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
-                    @Override
-                    public void onComplete(@NonNull Task<Location> task) {
-                        int defaulZoom = 15;
-                        if (task.isSuccessful()) {
-                            // Set the map's camera position to the current location of the device.
-                            lastKnownLocation = task.getResult();
-                            if (lastKnownLocation != null) {
-                                if (currentLoc!=null){currentLoc.remove();}
-                                LatLng current = new LatLng(lastKnownLocation.getLatitude(), lastKnownLocation.getLongitude());
-                                currentLoc = mMap.addMarker(new MarkerOptions().position(current).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)));
-                                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(current, defaulZoom));
-                            }
-                        } else {
-                            mMap.moveCamera(CameraUpdateFactory
-                                    .newLatLngZoom(new LatLng(0,0),defaulZoom));
-                            mMap.getUiSettings().setMyLocationButtonEnabled(false);
-                        }
-                    }
-                });
-            }
-        } catch (SecurityException e)  {
-            Log.e("Exception: %s", e.getMessage(), e);
 
-        }
-    }
-    @Override
-    public boolean onMarkerClick(final Marker marker) {
-//        dialog.show();
-//        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
-        detailsButton.setVisibility(View.VISIBLE);
-        return false;
-    }
     public void searchFromId(String Id){
         // Define a Place ID.
         final String placeId = Id;
@@ -349,5 +287,80 @@ private void enableMyCurrentLocation(){
         builder.setCancelable(false);
         dialog = builder.create();
         dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(MODE_KEY,isDayMode);
+        editor.apply();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        sensorManager.unregisterListener(this);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(MODE_KEY,isDayMode);
+        editor.apply();
+    }
+    @Override
+    public void onBackPressed() {
+        //Melakukan cek apakah keyboard turun dan recyvler view hilang saat menekan tombol back smartphone
+        if (!keyboardVisibility){
+            // jika tombol bek dipencet 2 kali dalam kurun waktu 3000 milisec (3 detik), maka akan reset semua dan keluar aplikasi
+            if (SystemClock.elapsedRealtime() - mLastClickTime < 3000){
+                SharedPreferences.Editor editor = sharedPreferences.edit();
+                editor.putBoolean(MODE_KEY,isDayMode);
+                editor.apply();
+                finishAffinity();
+                finish();
+            }
+            Toast.makeText(this,"Ketuk Sekali Lagi untuk Keluar Dari Aplikasi",Toast.LENGTH_SHORT).show();
+            mLastClickTime = SystemClock.elapsedRealtime();
+        }
+        else {super.onBackPressed();}
+    }
+    public void language(View v){
+        Intent intent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
+        startActivity(intent);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+        int sensorType = sensorEvent.sensor.getType();
+        float currentValue = sensorEvent.values[0];
+        switch (sensorType){
+            case Sensor.TYPE_AMBIENT_TEMPERATURE:
+                currentTemp = currentValue;
+                break;
+            case Sensor.TYPE_RELATIVE_HUMIDITY:
+                currentHumidity = currentValue;
+                break;
+            default:
+        }
+        Intent intent = new Intent(this, WeatherWidget.class);
+        intent.setAction("android.appwidget.action.APPWIDGET_UPDATE");
+        int ids[] = AppWidgetManager.getInstance(getApplication()).getAppWidgetIds(new ComponentName(getApplication(), WeatherWidget.class));
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS,ids);
+        sendBroadcast(intent);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int i) {
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (sensorTemp!=null){sensorManager.registerListener(this,sensorTemp, SensorManager.SENSOR_DELAY_NORMAL);}
+        if (sensorHumid!=null){sensorManager.registerListener(this,sensorHumid, SensorManager.SENSOR_DELAY_NORMAL);}
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
     }
 }
